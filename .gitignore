@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+libs/
+report_cache/
+report_files/
+talk_files/
+*.rds
+*.html

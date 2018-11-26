@@ -1,0 +1,310 @@
+---
+title: Probabilistic Changepoint Modelling
+author: 
+  - Mikhail Popov
+date: "`r sub('^0(\\d)', '\\1', format(Sys.Date(), '%d %B %Y'))`"
+abstract: |
+  Our imaginary store receives some number of customers per day. We start an advertising campaign which takes some time to have a full effect on the rate of customers we receive daily, and then has a long-term effect after we have stopped it. Using probabilistic programming languages (PPLs), we can specify a Bayesian model and infer the hidden rates.
+output:
+  wmfpar::pdf_report:
+    cite_r_packages:
+      - kableExtra
+      - rstan
+      - bridgesampling
+      - purrr
+      - dplyr
+      - tidyr
+      - ggplot2
+      - import
+nocite: "@*"
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = FALSE, message = FALSE, warning = FALSE,
+  dev = "png", dpi = 600
+)
+options(knitr.table.format = "latex")
+```
+```{r pkgs}
+library(magrittr) # piping
+import::from(dplyr, data_frame)
+library(kableExtra) # table formatting
+library(ggplot2) # visualization
+library(rstan) # modelling & inference
+library(bridgesampling) # model comparison
+# RStan Config:
+# options(mc.cores = parallel::detectCores())
+options(mc.cores = 1)
+rstan_options(auto_write = TRUE)
+```
+
+# Data simulation
+
+Suppose we are operating a store which receives a random number of customers per day, and specifically it's random according to the Poisson distribution with rate $\lambda_1$. Then we start an advertisement campaign -- which takes a few days to come to full effect -- that changes the rate to $\lambda_2$. When we stop the ad, it gradually loses effect but the campaign has had a long-lasting effect (e.g. we've gained new customers who come back regularly), which means our store now receives customers at rate $\lambda_3$.
+
+```{r parameters}
+lambda_1 <- 300
+lambda_2 <- 400
+lambda_3 <- 350
+transition_period_1 <- 7 # days
+transition_period_2 <- 21 # days
+total_days <- 180
+change_point_1 <- 60
+change_point_2 <- 90
+```
+
+```{r param_tables}
+data_frame(
+  parameter = c(
+    "$\\lambda_1$ (old normal)", "$\\lambda_2$ (temporary)", "$\\lambda_3$ (new normal)",
+    "$N$ (total days)", "$T_1$ (ad start)", "$T_2$ (ad stop)",
+    "$d_1$ (time for full effect)", "$d_2$ (time to new normal)"
+  ),
+  value = c(
+    lambda_1, lambda_2, lambda_3,
+    total_days, change_point_1, change_point_2,
+    transition_period_1, transition_period_2
+  )
+) %>%
+  kable(
+    escape = FALSE, booktabs = TRUE,
+    caption = "Simulation parameters"
+  ) %>%
+  kable_styling(latex_options = "hold_position") %>%
+  group_rows(index = c("Rates (unknown)" = 3, "Other parameters" = 5))
+```
+
+In the simulation, we have two weights -- $w_1$ and $w_2$ -- which sum to 1 and produce gradual (albeit not smooth) transitions between the different rates. The change is a slope in this toy scenario, but it can also be a more interesting transition like a sigmoid function such as the [Gompertz curve](https://en.wikipedia.org/wiki/Gompertz_function).
+
+```{r simulation}
+weight_func <- function(i, length_out) {
+  weight_1 <- seq(1, 0, length.out = length_out + 2)[2:(length_out + 1)]
+  weight_2 <- 1 - weight_1
+  return(c(weight_1[i], weight_2[i]))
+}
+rcustomer <- function(t, T1, T2, d1, d2, l1, l2, l3, wf) {
+  if (t <= T1) {
+    l <- l1
+  } else if (t > T2 + d2) {
+    l <- l3
+  } else {
+    if (t > T1 && t <= T1 + d1) {
+      i <- t - T1
+      w <- wf(i, d1)
+      l <- w[1] * l1 + w[2] * l2
+    } else if (t > T2 && t <= T2 + d2) {
+      i <- t - T2
+      w <- wf(i, d2)
+      l <- w[1] * l2 + w[2] * l3
+    } else {
+      l <- l2
+    }
+  }
+  n <- rpois(1, l)
+  return(data_frame(day = t, rate = l, customers = n))
+}
+```
+
+```{r customers}
+set.seed(42)
+customers <- purrr::map_dfr(
+  1:total_days, rcustomer, wf = weight_func,
+  T1 = change_point_1, T2 = change_point_2,
+  d1 = transition_period_1, d2 = transition_period_2,
+  l1 = lambda_1, l2 = lambda_2, l3 = lambda_3
+)
+```
+
+```{r plot, fig.width=8, fig.height=4, dpi=300}
+annotations <- data_frame(
+  day = c(change_point_1, change_point_2),
+  event = c("Start", "Stop")
+)
+ggplot(customers, aes(x = day, y = customers)) +
+  geom_vline(
+    aes(xintercept = day), data = annotations,
+    linetype = "dashed", color = "blue"
+  ) +
+  geom_line() +
+  geom_line(aes(y = rate), color = "blue", size = 1.1) +
+  geom_label(
+    aes(label = event, y = 250), data = annotations,
+    color = "blue"
+  ) +
+  theme_minimal(14, "Source Sans Pro") +
+  labs(
+    x = "Day", y = "Customers per day",
+    title = "Daily customers before, during, and after an advertising campaign"
+  )
+```
+
+# Modelling
+
+We'll take a look at three similar models -- $\mathcal{M_1}, \mathcal{M_2}, \mathcal{M}_3$ -- which model the daily counts of customers $y_t$ as a [Poisson](https://en.wikipedia.org/wiki/Poisson_distribution)-distributed random variable with time-varying rate $\lambda(t)$, up to a maximum of $t = N$ days of data: $y_t~\sim~\text{Poisson}(\lambda(t)),~t = 1,\ldots,N.$
+
+The ad campaign starts on $T_1$ and stops on $T_2$. We are interested in inferring $\lambda_1$ (the rate before $T_1$), $\lambda_2$ (the rate between $T_1$ and $T_2$), and $\lambda_3$ (the rate after $T_2$). We specify $\lambda~\sim~\mathcal{N}(300, 100)$ and let Stan implicitly assign a default prior to $\beta_1$ and $\beta_2$.
+
+In the simpler model $\mathcal{M}_1$, we ignore the obvious transition periods and model the switch between the rates as immediate:
+
+$$
+\lambda(t) = \begin{cases}
+  \lambda_1, & \text{if } t \leq T_1, \\
+  \lambda_2, & \text{if } T_1 < t \leq T_2, \\
+  \lambda_3, & \text{if } t > T_2.
+\end{cases}
+$$
+
+In the slightly more complex model $\mathcal{M}_2$, we include the two gradual changes as slopes over $d_1$ and $d_2$ days after $T_1$ and $T_2$, respectively. We formalize this as follows:
+
+$$
+\lambda(t) = \begin{cases}
+  \lambda_1, & \text{if } t \leq T_1, \\
+  \lambda_2, & \text{if } T_1 + d_1 \leq t \leq T_2, \\
+  \lambda_3, & \text{if } t \geq T_2 + d_2, \\
+  \lambda_1 + \beta_1 (t - T_1), & \text{if } T_1 < t \leq T_1 + d_1, \\
+  \lambda_2 + \beta_2 (t - T_2), & \text{if } T_2 < t \leq T_2 + d_2.
+\end{cases}
+$$
+
+**Note**: in this toy scenario we know $d_1$ and $d_2$, but we can also make them hidden parameters to infer from the data. We could formalize our intuition about their values by assigning them priors $\mathcal{N}(7, 2)$ and $\mathcal{N}(14, 4)$, respectively.
+
+We can also set up covariates -- intercept term for pre-ad/baseline days, $x_1$ (ramping-up and ramping-down indicator of ad days), and $x_2$ (indicator of post-ad days) -- and perform Poisson regression for $\mathcal{M}_3$:
+
+$$
+\lambda(t) = \exp\left\{\beta_0 + \beta_1 x_{1,t} + \beta_2 x_{2,t}\right\}
+$$
+
+\clearpage
+
+# Model comparison
+
+```{r models, message=FALSE}
+model_1 <- stan_model("models/model_1.stan", "model_1")
+model_2 <- stan_model("models/model_2.stan", "model_2")
+model_3 <- stan_model("models/model_3.stan", "model_3")
+```
+
+```{r mcmc_draw, cache=TRUE}
+# Data & samples for model 1:
+data_1 <- list(
+  N = total_days, y = customers$customers,
+  T = c(change_point_1, change_point_2)
+)
+draws_1 <- sampling(model_1, data = data_1, refresh = 0)
+# Data & samples for model 2:
+data_2 <- list(
+  N = total_days, y = customers$customers,
+  T = c(change_point_1, change_point_2),
+  d = c(transition_period_1, transition_period_2)
+)
+draws_2 <- sampling(model_2, data = data_2, refresh = 0)
+# Data & samples for model 3:
+data_3 <- list(
+  N = total_days, y = customers$customers,
+  x1 = numeric(total_days), x2 = numeric(total_days), x3 = numeric(total_days)
+)
+data_3$x1 <- rep(1, total_days) # intercept is baseline
+data_3$x2[change_point_1:(change_point_1 + transition_period_1)] <- seq(0, 1, length.out = transition_period_1 + 1)
+data_3$x2[(change_point_1 + transition_period_1):change_point_2] <- 1
+data_3$x2[change_point_2:(change_point_2 + transition_period_2)] <- seq(1, 0, length.out = transition_period_2 + 1)
+data_3$x3[(change_point_2 + transition_period_2 + 1):total_days] <- 1
+draws_3 <- sampling(model_3, data = data_3, refresh = 0)
+draws <- list(model_1 = draws_1, model_2 = draws_2, model_3 = draws_3)
+```
+
+```{r bridge_samples, cache=TRUE, dependson='mcmc_draws'}
+bridge_samples <- list(
+  model_1 = bridge_sampler(draws_1, silent = TRUE),
+  model_2 = bridge_sampler(draws_2, silent = TRUE),
+  model_3 = bridge_sampler(draws_3, silent = TRUE)
+)
+```
+
+```{r helpers}
+extract_ci = function(draws, ...) {
+  extracted_ci <- draws %>%
+    broom::tidyMCMC(pars = "lambda", conf.int = TRUE, ...) %>%
+    dplyr::rename(est = estimate) %>%
+    dplyr::mutate(est = sprintf("%.1f (%.1f--%.1f)", est, conf.low, conf.high)) %>%
+    dplyr::select(term, est) %>%
+    tidyr::spread(term, est)
+  return(extracted_ci)
+}
+```
+
+```{r model_comparison}
+data_frame(
+  model = names(bridge_samples),
+  post_prob = post_prob(purrr::map_dbl(bridge_samples, ~ .x$logml))
+) %>%
+  dplyr::left_join(purrr::map_dfr(draws, extract_ci, .id = "model"), by = "model") %>%
+  dplyr::mutate(
+    post_prob = sprintf("%.4f", post_prob),
+    model = sub("model_([1-3])", "$\\\\mathcal{M}_\\1$", model),
+  ) %>%
+  kable(
+    col.names = c("Model", "$\\text{Pr}(\\mathcal{M}|D)$",
+                  sprintf("$\\lambda_%i$ (%.0f)", 1:3, c(lambda_1, lambda_2, lambda_3))),
+    booktabs = TRUE, escape = FALSE, align = c("l", "r", "c", "c", "c"),
+    caption = "Posterior probabilities of the three models given data and the estimated rates, calculated using the bridgesampling package."
+  ) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(header = c(" " = 2, "Estimate (95% Credible Interval)" = 3))
+```
+
+The [Bayes factor](https://en.wikipedia.org/wiki/Bayes_factor) (BF) can be used to decide between two competing models $\mathcal{M}_1$ (instant changes between rates) and $\mathcal{M}_2$ (gradual changes between rates). We compute it using the following formula:
+
+$$
+\text{BF} = \frac{\text{Pr}(\mathcal{M}_1|D)\text{Pr}(\mathcal{M}_1)}{\text{Pr}(\mathcal{M}_3|D)\text{Pr}(\mathcal{M}_3)},
+$$
+
+where $\text{Pr}(\mathcal{M})$ is how probable a model is *a priori* and $\text{Pr}(\mathcal{M}|D)$ is the posterior probability of a model given data $D$ (shown in Table 2). Using **bridgesampling** [@bridgesampling] allows us to calculate marginal likelihoods of models and therefore compute the BF, which -- for $\mathcal{M}_1$ compared to $\mathcal{M}_3$, for example -- comes out to be `r round(bayes_factor(bridge_samples$model_1, bridge_samples$model_3)$bf, 2)`, meaning there is strong evidence in the data for the non-regression model.
+
+## Inference results
+
+```{r results}
+differences <- c(
+  lambda_2 - lambda_1,
+  lambda_3 - lambda_2,
+  lambda_3 - lambda_1
+)
+draws_2 %>%
+  broom::tidyMCMC(
+    pars = c("diff21", "diff32", "diff31"),
+    estimate.method = "median",
+    conf.int = TRUE,
+    conf.method = "HPDinterval"
+  ) %>%
+  dplyr::mutate(
+    term = c(
+      # paste0("$\\lambda_", 1:3, "$"),
+      "$\\lambda_2 - \\lambda_1$",
+      "$\\lambda_3 - \\lambda_2$",
+      "$\\lambda_3 - \\lambda_1$"
+    ),
+    truth = c(
+      # lambda_1, lambda_2, lambda_3,
+      differences
+    ),
+    conf.int = sprintf("(%.1f, %.1f)", conf.low, conf.high)
+  ) %>%
+  dplyr::select(term, truth, estimate, conf.int) %>%
+  kable(
+    escape = FALSE, booktabs = TRUE, digits = 1,
+    align = c("l", "r", "r", "c"),
+    col.names = c("Parameter", "Truth", "Point Estimate", "95\\% Credible Interval"),
+    caption = "Inference using $\\mathcal{M}_2$ (gradual changes between rates, non-regression)."
+  ) %>%
+  kable_styling(latex_options = c("hold_position"))
+  # group_rows(index = c("Rates" = 3, "Differences" = 3))
+```
+
+Table 3 shows the inferred differences of rates and we can see that our imaginary advertisement had a positive, statistically significant impact on how many imaginary customers our imaginary store receives per day on average, both during the campaign and long after.
+
+\newpage
+
+# References
+
+\footnotesize

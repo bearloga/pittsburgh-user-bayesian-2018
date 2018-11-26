@@ -1,0 +1,127 @@
+---
+output:
+  xaringan::moon_reader:
+    css: [default, metropolis, metropolis-fonts]
+    seal: false
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+---
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+```
+
+class: title-slide, bottom
+
+# A Workflow For Bayesian Modelling and Reporting
+
+<br>
+
+### Mikhail Popov
+
+<br><br>
+
+`r icon::fa("envelope")` mikhail @ mpopov.com / wikimedia.org
+
+`r icon::fa("twitter")` [bearloga](https://twitter.com/bearloga)
+
+`r icon::fa("github")` [bearloga](https://github.com/bearloga)
+
+`r icon::fa("wikipedia-w")` [[[User:MPopov (WMF)]]](https://en.wikipedia.org/wiki%2fUser%3aMPopov_%28WMF%29)
+
+---
+
+# Packages
+
+## Essentials
+
+- `tidyverse` (especially `dplyr`, `tidyr`, `purrr`,` broom`)
+- `rstan` for modelling
+- `bridgesampling` for model comparison
+- `kableExtra` for table formatting
+- `rmarkdown` for final output
+
+## Suggestions
+
+- [`memor`](https://hebrewseniorlife.github.io/memor/) for a customizable template, which [`wmfpar`](https://github.com/bearloga/wmf-product-analytics-report/) is based on
+- [`tinytex`](https://yihui.name/tinytex/) for LaTeX installation
+
+---
+
+# Model building
+
+```R
+library(rstan)
+
+model_2 <- stan_model("models/model_2.stan", "model_2")
+
+data_2 <- list(
+  N = nrow(customers), y = customers$customers,
+  T = c(change_point_1, change_point_2),
+  d = c(transition_period_1, transition_period_2)
+)
+
+draws_2 <- sampling(model_2, data = data_2, refresh = 0)
+```
+
+---
+
+# Distributions
+
+```R
+# install.packages("devtools")
+devtools::install_github("bearloga/tinydensR")
+```
+
+---
+
+# Model comparison
+
+```R
+library(bridgesampling)
+
+bridge_samples <- list(
+  model_1 = bridge_sampler(draws_1, silent = TRUE),
+  model_2 = bridge_sampler(draws_2, silent = TRUE)
+)
+
+data.frame(
+  model = c(1, 2),
+  post_prob = post_prob(purrr::map_dbl(bridge_samples, ~ .x$logml))
+) %>%
+  dplyr::mutate(post_prob = sprintf("%.2f%%", 100 * post_prob)) %>%
+  kable(
+    col.names = c("Model", "Posterior Probability"), booktabs = TRUE,
+    caption = "Posterior probabilities of the two models given data."
+  ) %>%
+  kable_styling(latex_options = "hold_position")
+```
+
+---
+
+![](images/inline_bf.png)
+
+Since R Markdown supports inline R code, you can write text with dynamic numbers:
+
+```
+where $\text{Pr}(\mathcal{M})$ is how probable a model is *a priori* and
+$\text{Pr}(\mathcal{M}|D)$ is the posterior probability of a model given
+data $D$. Using **bridgesampling** allows us to calculate the marginal
+likelihoods and therefore compute the BF, which comes out to be `r
+bf21` -- meaning the gradual model is very much supported by the data.
+```
+
+Instead of using `bayes_factor()` directly, we apply some formatting before printing:
+
+```R
+bf21 <- bayes_factor(bridge_samples$model_2, bridge_samples$model_1)
+bf21 <- formatC(bf21$bf, format = "e", digits = 1)
+bf21 <- sprintf("$%s}$", sub("e+", " \\times 10^{", bf21, fixed = TRUE))
+```
+
+---
+
+# Presentation of results

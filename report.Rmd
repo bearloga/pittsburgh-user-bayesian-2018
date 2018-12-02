@@ -17,11 +17,13 @@ output:
       - tidyr
       - ggplot2
       - import
+      - here
 nocite: "@*"
 ---
 
 ```{r setup, include=FALSE}
 library(knitr)
+library(here)
 opts_chunk$set(
   echo = FALSE, message = FALSE, warning = FALSE,
   dev = "png", dpi = 600, digits = 3
@@ -143,7 +145,7 @@ ggplot(customers, aes(x = day, y = customers)) +
 
 # Modelling
 
-We'll take a look at three similar models -- $\mathcal{M_1}, \mathcal{M_2}, \mathcal{M}_3$ -- which model the daily counts of customers $y_t$ as a [Poisson](https://en.wikipedia.org/wiki/Poisson_distribution)-distributed random variable with time-varying rate $\lambda(t)$, up to a maximum of $t = N$ days of data: $y_t~\sim~\text{Poisson}(\lambda(t)),~t = 1,\ldots,N.$
+We'll take a look at three similar models -- $\mathcal{M}_1, \mathcal{M}_2, \mathcal{M}_3$ -- which model the daily counts of customers $y_t$ as a [Poisson](https://en.wikipedia.org/wiki/Poisson_distribution)-distributed random variable with time-varying rate $\lambda(t)$, up to a maximum of $t = N$ days of data: $y_t~\sim~\text{Poisson}(\lambda(t)),~t = 1,\ldots,N.$
 
 The ad campaign starts on $T_1$ and stops on $T_2$. We are interested in inferring $\lambda_1$ (the rate before $T_1$), $\lambda_2$ (the rate between $T_1$ and $T_2$), and $\lambda_3$ (the rate after $T_2$). We specify $\lambda~\sim~\mathcal{N}(300, 100)$ and let Stan implicitly assign a default prior to $\beta_1$ and $\beta_2$.
 
@@ -187,14 +189,13 @@ models <- list(
 ```
 
 ```{r mcmc_draw, cache=TRUE}
-datas <- list(model_1 = list(
+data <- list(
   N = total_days, y = customers$customers,
-  T = c(change_point_1, change_point_2)
-))
-datas$model_2 <- datas$model_1
-datas$model_2$d <- c(transition_period_1, transition_period_2)
+  T = c(change_point_1, change_point_2),
+  d = c(transition_period_1, transition_period_2)
+)
 
-draws <- purrr::map2(models, datas, ~ sampling(.x, data = .y, refresh = 0))
+draws <- purrr::map(models, sampling, data = data, refresh = 0)
 ```
 
 ```{r bridge_samples, cache=TRUE, dependson='mcmc_draws'}
@@ -227,7 +228,7 @@ data_frame(model = names(bridge_samples), post_prob = post_prob(marginal_likelih
     booktabs = TRUE, escape = FALSE, align = c("l", "r", "c", "c", "c"),
     caption = "Posterior probabilities of the three models given data and the estimated rates, calculated using the bridgesampling package."
   ) %>%
-  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  kable_styling(latex_options = c("hold_position")) %>%
   add_header_above(header = c(" " = 2, "Estimate (95% Credible Interval)" = 3))
 ```
 
@@ -249,18 +250,18 @@ differences <- c(
 )
 draws$model_2 %>%
   broom::tidyMCMC(
-    pars = c("diff21", "diff32", "diff31"),
+    pars = c("lambda", "diff21", "diff32", "diff31"),
     estimate.method = "median", conf.int = TRUE, conf.method = "HPDinterval"
   ) %>%
   dplyr::mutate(
     term = c(
-      # paste0("$\\lambda_", 1:3, "$"),
+      paste0("$\\lambda_", 1:3, "$"),
       "$\\lambda_2 - \\lambda_1$",
       "$\\lambda_3 - \\lambda_2$",
       "$\\lambda_3 - \\lambda_1$"
     ),
     truth = c(
-      # lambda_1, lambda_2, lambda_3,
+      lambda_1, lambda_2, lambda_3,
       differences
     ),
     conf.int = sprintf("(%.1f, %.1f)", conf.low, conf.high)
@@ -270,10 +271,10 @@ draws$model_2 %>%
     escape = FALSE, booktabs = TRUE, digits = 1,
     align = c("l", "r", "r", "c"),
     col.names = c("Parameter", "Truth", "Point Estimate", "95\\% Credible Interval"),
-    caption = "Inference using $\\mathcal{M}_2$ (gradual changes between rates, non-regression)."
+    caption = "Inference using $\\mathcal{M}_2$ (gradual changes between rates)."
   ) %>%
-  kable_styling(latex_options = c("hold_position"))
-  # group_rows(index = c("Rates" = 3, "Differences" = 3))
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  group_rows(index = c("Rates" = 3, "Differences" = 3))
 ```
 
 Table 3 shows the inferred differences of rates and we can see that our imaginary advertisement had a positive, statistically significant impact on how many imaginary customers our imaginary store receives per day on average, both during the campaign and long after.

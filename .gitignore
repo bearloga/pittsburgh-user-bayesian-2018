@@ -3,6 +3,5 @@
 .RData
 .Ruserdata
 report_cache/
-talk_files/
 *.rds
 talk_cache/

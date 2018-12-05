@@ -200,7 +200,6 @@ draws <- purrr::map(models, sampling, data = data, refresh = 0)
 
 ```{r bridge_samples, cache=TRUE, dependson='mcmc_draws'}
 bridge_samples <- purrr::map(draws, bridge_sampler, silent = TRUE)
-marginal_likelihoods <- purrr::map_dbl(bridge_samples, ~ .x$logml)
 ```
 
 ```{r helpers}
@@ -216,7 +215,10 @@ extract_ci = function(draws, ...) {
 ```
 
 ```{r model_comparison}
-data_frame(model = names(bridge_samples), post_prob = post_prob(marginal_likelihoods)) %>%
+data_frame(
+  model = names(bridge_samples),
+  post_prob = post_prob(purrr::map_dbl(bridge_samples, logml))
+) %>%
   dplyr::left_join(purrr::map_dfr(draws, extract_ci, .id = "model"), by = "model") %>%
   dplyr::mutate(
     post_prob = sprintf("%.4f", post_prob),

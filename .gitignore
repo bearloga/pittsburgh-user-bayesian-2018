@@ -8,3 +8,4 @@ report_files/
 talk_files/
 *.rds
 *.html
+talk_cache/

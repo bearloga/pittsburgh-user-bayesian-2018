@@ -107,20 +107,20 @@ library(tidyverse)
 ```
 ## $a
 ## [1] 1 2 3 4
-##
+## 
 ## $b
 ## [1] 3 4 5 6 7
-##
+## 
 ## $c
 ## [1]  4  5  6  7  8  9 10 11 12
 ```
 
 ```r
-* purrr::map_int(example, length)
+* purrr::map_int(example, length) 
 ```
 
 ```
-## a b c
+## a b c 
 ## 4 5 9
 ```
 
@@ -152,13 +152,13 @@ months %&gt;%
 
 ```
 ## # A tibble: 6 x 3
-##   component which    month
-##   &lt;chr&gt;     &lt;chr&gt;    &lt;chr&gt;
-## 1 a         earliest JANUARY
-## 2 b         earliest MARCH
-## 3 c         earliest APRIL
-## 4 a         latest   APRIL
-## 5 b         latest   JULY
+##   component which    month   
+##   &lt;chr&gt;     &lt;chr&gt;    &lt;chr&gt;   
+## 1 a         earliest JANUARY 
+## 2 b         earliest MARCH   
+## 3 c         earliest APRIL   
+## 4 a         latest   APRIL   
+## 5 b         latest   JULY    
 ## 6 c         latest   DECEMBER
 ```
 
@@ -206,8 +206,8 @@ m &lt;- model(theta) # creates a greta model object
 
 `plot(m)` produces a visual representation:
 
-<div id="htmlwidget-786df4ba3fa121bc385a" style="width:100%;height:144px;" class="grViz html-widget"></div>
-<script type="application/json" data-for="htmlwidget-786df4ba3fa121bc385a">{"x":{"diagram":"digraph {\n\ngraph [layout = \"dot\",\n       outputorder = \"edgesfirst\",\n       bgcolor = \"white\",\n       rankdir = \"LR\"]\n\nnode [fontname = \"Helvetica\",\n      fontsize = \"10\",\n      shape = \"circle\",\n      fixedsize = \"true\",\n      width = \"0.5\",\n      style = \"filled\",\n      fillcolor = \"aliceblue\",\n      color = \"gray70\",\n      fontcolor = \"gray50\"]\n\nedge [fontname = \"Helvetica\",\n     fontsize = \"8\",\n     len = \"1.5\",\n     color = \"gray80\",\n     arrowsize = \"0.5\"]\n\n  \"1\" [label = \"theta\n\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"circle\", color = \"#B2B2B2\", width = \"0.6\", height = \"0.48\", fillcolor = \"#E5E5E5\"] \n  \"2\" [label = \"beta\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"diamond\", color = \"#4C4C4C\", width = \"1\", height = \"0.8\", fillcolor = \"#B2B2B2\"] \n  \"3\" [label = \"3\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"square\", color = \"#B2B2B2\", width = \"0.5\", height = \"0.4\", fillcolor = \"#FFFFFF\"] \n  \"4\" [label = \"3\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"square\", color = \"#B2B2B2\", width = \"0.5\", height = \"0.4\", fillcolor = \"#FFFFFF\"] \n  \"5\" [label = \"binomial\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"diamond\", color = \"#4C4C4C\", width = \"1\", height = \"0.8\", fillcolor = \"#B2B2B2\"] \n  \"6\" [label = \"1\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"square\", color = \"#B2B2B2\", width = \"0.5\", height = \"0.4\", fillcolor = \"#FFFFFF\"] \n  \"7\" [label = \"y\n\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"square\", color = \"#B2B2B2\", width = \"0.5\", height = \"0.4\", fillcolor = \"#FFFFFF\"] \n\"1\"->\"5\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", label = \"prob\", style = \"solid\"] \n\"2\"->\"1\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", penwidth = \"3\", style = \"dashed\"] \n\"3\"->\"2\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", label = \"shape1\", style = \"solid\"] \n\"4\"->\"2\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", label = \"shape2\", style = \"solid\"] \n\"5\"->\"7\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", penwidth = \"3\", style = \"dashed\"] \n\"6\"->\"5\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", label = \"size\", style = \"solid\"] \n}","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
+<div id="htmlwidget-b5b45c9e2c9eb7c759c7" style="width:100%;height:144px;" class="grViz html-widget"></div>
+<script type="application/json" data-for="htmlwidget-b5b45c9e2c9eb7c759c7">{"x":{"diagram":"digraph {\n\ngraph [layout = \"dot\",\n       outputorder = \"edgesfirst\",\n       bgcolor = \"white\",\n       rankdir = \"LR\"]\n\nnode [fontname = \"Helvetica\",\n      fontsize = \"10\",\n      shape = \"circle\",\n      fixedsize = \"true\",\n      width = \"0.5\",\n      style = \"filled\",\n      fillcolor = \"aliceblue\",\n      color = \"gray70\",\n      fontcolor = \"gray50\"]\n\nedge [fontname = \"Helvetica\",\n     fontsize = \"8\",\n     len = \"1.5\",\n     color = \"gray80\",\n     arrowsize = \"0.5\"]\n\n  \"1\" [label = \"theta\n\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"circle\", color = \"#B2B2B2\", width = \"0.6\", height = \"0.48\", fillcolor = \"#E5E5E5\"] \n  \"2\" [label = \"beta\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"diamond\", color = \"#4C4C4C\", width = \"1\", height = \"0.8\", fillcolor = \"#B2B2B2\"] \n  \"3\" [label = \"3\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"square\", color = \"#B2B2B2\", width = \"0.5\", height = \"0.4\", fillcolor = \"#FFFFFF\"] \n  \"4\" [label = \"3\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"square\", color = \"#B2B2B2\", width = \"0.5\", height = \"0.4\", fillcolor = \"#FFFFFF\"] \n  \"5\" [label = \"binomial\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"diamond\", color = \"#4C4C4C\", width = \"1\", height = \"0.8\", fillcolor = \"#B2B2B2\"] \n  \"6\" [label = \"1\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"square\", color = \"#B2B2B2\", width = \"0.5\", height = \"0.4\", fillcolor = \"#FFFFFF\"] \n  \"7\" [label = \"y\n\", fontcolor = \"#000000\", fontsize = \"12\", penwidth = \"2\", shape = \"square\", color = \"#B2B2B2\", width = \"0.5\", height = \"0.4\", fillcolor = \"#FFFFFF\"] \n\"1\"->\"5\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", label = \"prob\", style = \"solid\"] \n\"2\"->\"1\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", penwidth = \"3\", style = \"dashed\"] \n\"3\"->\"2\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", label = \"shape1\", style = \"solid\"] \n\"4\"->\"2\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", label = \"shape2\", style = \"solid\"] \n\"5\"->\"7\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", penwidth = \"3\", style = \"dashed\"] \n\"6\"->\"5\" [color = \"Gainsboro\", fontname = \"Helvetica\", fontcolor = \"gray\", fontsize = \"11\", penwidth = \"3\", label = \"size\", style = \"solid\"] \n}","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
 
 ---
 
@@ -253,11 +253,11 @@ bayesplot::mcmc_dens(draws) # plots posterior of theta
 - Afterward there's a gradual change to new normal
 ]
 
-&lt;br&gt;&lt;br&gt;
+&lt;br&gt;
 
 .center[.large[**What were the short-term and long-term effects of the ad?**]]
 
-.footnote[For simulation code, see [report.Rmd#L84-L121](https://github.com/bearloga/pittsburgh-user-bayesian-2018/blob/master/report.Rmd#L84-L121)]
+.footnote[For simulation code see [report.Rmd#L84-L121](https://github.com/bearloga/pittsburgh-user-bayesian-2018/blob/master/report.Rmd#L84-L121); for example report see [report.pdf](https://github.com/bearloga/pittsburgh-user-bayesian-2018/blob/master/report.pdf)]
 
 ---
 
